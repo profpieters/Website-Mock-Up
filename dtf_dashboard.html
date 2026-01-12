@@ -1,0 +1,1494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DTF Dashboard</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.1/nouislider.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f7f3ef;
+            color: #1a1a1a;
+            min-height: 100vh;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            color: #1a1a1a;
+        }
+        .subtitle {
+            text-align: center;
+            color: #6b7280;
+            margin-bottom: 20px;
+        }
+        .controls {
+            max-width: 1200px;
+            margin: 0 auto 20px;
+            padding: 20px;
+            background: #fff;
+            border-radius: 12px;
+            border: 1px solid #e5e5e5;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .slider-container {
+            flex: 1;
+            min-width: 300px;
+        }
+        .slider-container label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        .slider-wrapper {
+            padding: 10px 15px 30px;
+            position: relative;
+        }
+        #range-slider {
+            height: 12px;
+        }
+        .noUi-target {
+            background: #e5e5e5;
+            border: none;
+            box-shadow: none;
+        }
+        .noUi-connect {
+            background: #2775ca;
+        }
+        .noUi-handle {
+            background: #fff;
+            border: 2px solid #2775ca;
+            border-radius: 50%;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+            cursor: ew-resize;
+            width: 22px !important;
+            height: 22px !important;
+            top: -6px !important;
+            right: -11px !important;
+        }
+        .noUi-handle:before, .noUi-handle:after {
+            display: none;
+        }
+        .noUi-tooltip {
+            background: #1a1a1a;
+            border: 1px solid #2775ca;
+            color: #fff;
+            font-size: 12px;
+            padding: 3px 8px;
+        }
+        .days-display {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            bottom: 0;
+            background: #2775ca;
+            color: #fff;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: bold;
+            pointer-events: none;
+        }
+        .date-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 12px;
+            color: #666;
+        }
+        .disclaimer {
+            margin: 10px 0 0;
+            font-size: 11px;
+            color: #6b7280;
+            font-style: italic;
+            text-align: center;
+        }
+        .current-value {
+            color: #2775ca;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        .axis-selectors {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            width: 100%;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #e5e5e5;
+        }
+        .axis-select {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .axis-select label {
+            font-weight: 500;
+            font-size: 14px;
+        }
+        .axis-select select {
+            background: #fff;
+            color: #1a1a1a;
+            border: 1px solid #e5e5e5;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 14px;
+            cursor: pointer;
+            min-width: 180px;
+        }
+        .axis-select select:hover {
+            border-color: #2775ca;
+        }
+        .axis-select select:focus {
+            outline: none;
+            border-color: #2775ca;
+        }
+        .toggle-option {
+            display: flex;
+            align-items: center;
+        }
+        .toggle-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            padding: 8px 12px;
+            background: #fff;
+            border-radius: 8px;
+            border: 1px solid #e5e5e5;
+            font-size: 14px;
+        }
+        .toggle-label:hover {
+            border-color: #2775ca;
+        }
+        .toggle-label input[type="checkbox"],
+        .toggle-label input[type="radio"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+        .filter-row {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            width: 100%;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #e5e5e5;
+            flex-wrap: wrap;
+        }
+        .filter-row-title {
+            font-weight: 500;
+            font-size: 14px;
+            min-width: 180px;
+        }
+        .filter-options {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .filter-disclaimer {
+            font-size: 11px;
+            color: #6b7280;
+            font-style: italic;
+        }
+        .country-select {
+            background: #fff;
+            color: #1a1a1a;
+            border: 1px solid #e5e5e5;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .country-select:hover {
+            border-color: #2775ca;
+        }
+        .country-select:focus {
+            outline: none;
+            border-color: #2775ca;
+        }
+        .meme-select {
+            background: #fff;
+            color: #1a1a1a;
+            border: 1px solid #e5e5e5;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .meme-select:hover {
+            border-color: #2775ca;
+        }
+        .meme-select:focus {
+            outline: none;
+            border-color: #2775ca;
+        }
+        .tooltip-container {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .tooltip-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 16px;
+            background: #e5e5e5;
+            color: #6b7280;
+            border-radius: 50%;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: help;
+            flex-shrink: 0;
+        }
+        .tooltip-icon:hover {
+            background: #2775ca;
+            color: #fff;
+        }
+        .tooltip-text {
+            visibility: hidden;
+            opacity: 0;
+            position: absolute;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1a1a1a;
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 400;
+            white-space: normal;
+            width: 220px;
+            text-align: left;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            transition: opacity 0.2s, visibility 0.2s;
+        }
+        .tooltip-text::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 6px;
+            border-style: solid;
+            border-color: #1a1a1a transparent transparent transparent;
+        }
+        .tooltip-icon:hover + .tooltip-text,
+        .tooltip-text:hover,
+        .tooltip-container:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+        .tooltip-wide {
+            width: 320px;
+            left: 0;
+            transform: translateX(0);
+            bottom: auto;
+            top: 125%;
+        }
+        .tooltip-wide::after {
+            left: 20px;
+            transform: none;
+            top: auto;
+            bottom: 100%;
+            border-color: transparent transparent #1a1a1a transparent;
+        }
+        #timeseries-container {
+            max-width: 1200px;
+            margin: 20px auto;
+            background: #fff;
+            border-radius: 12px;
+            border: 1px solid #e5e5e5;
+            padding: 20px;
+        }
+        .timeseries-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .timeseries-toggles {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .view-mode-group {
+            display: flex;
+            gap: 5px;
+        }
+        .timeseries-slider-container {
+            margin-bottom: 15px;
+        }
+        .section-title {
+            margin: 0 0 15px;
+            font-size: 20px;
+            color: #1a1a1a;
+            text-align: center;
+        }
+        .timeseries-placeholder {
+            text-align: center;
+            padding: 40px;
+            color: #6b7280;
+            font-size: 16px;
+        }
+        #timeseries-title {
+            margin: 0;
+            font-size: 16px;
+            color: #2775ca;
+        }
+        .timeseries-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+        }
+        .dtf-card {
+            background: #f7f3ef;
+            border-radius: 12px;
+            border: 1px solid #e5e5e5;
+            padding: 15px;
+            overflow: hidden;
+        }
+        .dtf-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .dtf-card-title {
+            margin: 0;
+            font-size: 16px;
+            color: #2775ca;
+        }
+        .dtf-remove-btn {
+            background: none;
+            border: none;
+            color: #6b7280;
+            cursor: pointer;
+            font-size: 18px;
+            padding: 0 5px;
+        }
+        .dtf-remove-btn:hover {
+            color: #fff;
+        }
+        .dtf-chart {
+            height: 300px;
+            width: 100%;
+            overflow: hidden;
+        }
+        .dtf-about {
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 10px;
+            line-height: 1.4;
+        }
+        .dtf-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px 20px;
+            font-size: 12px;
+            color: #1a1a1a;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #e5e5e5;
+        }
+        .dtf-meta span {
+            white-space: nowrap;
+        }
+        .dtf-meta strong {
+            color: #6b7280;
+            font-weight: 500;
+        }
+        .dtf-footer {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #e5e5e5;
+            text-align: right;
+        }
+        .detailed-view-link {
+            color: #2775ca;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        .detailed-view-link:hover {
+            text-decoration: underline;
+        }
+        .clear-btn {
+            background: #2775ca;
+            border: none;
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .clear-btn:hover {
+            background: #3b8de0;
+        }
+        .timeseries-stats {
+            margin-top: 20px;
+            overflow-x: auto;
+        }
+        .timeseries-stats table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .timeseries-stats th,
+        .timeseries-stats td {
+            padding: 6px 8px;
+            text-align: left;
+            border-bottom: 1px solid #e5e5e5;
+        }
+        .timeseries-stats td:nth-child(odd) {
+            color: #6b7280;
+            font-weight: 500;
+        }
+        .timeseries-stats td:nth-child(even) {
+            color: #1a1a1a;
+        }
+        .stat-positive {
+            color: #10b981 !important;
+        }
+        .stat-negative {
+            color: #ef4444 !important;
+        }
+        #chart {
+            max-width: 1200px;
+            height: 600px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 12px;
+            border: 1px solid #e5e5e5;
+            padding: 10px;
+        }
+        .stats {
+            max-width: 1200px;
+            margin: 20px auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            overflow: visible;
+        }
+        .stat-card {
+            background: #fff;
+            border: 1px solid #e5e5e5;
+            padding: 15px;
+            border-radius: 12px;
+            overflow: visible;
+        }
+        .stat-card h3 {
+            margin: 0 0 10px;
+            color: #6b7280;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            position: relative;
+        }
+        .stat-card h3 .tooltip-text {
+            text-transform: none;
+            letter-spacing: normal;
+        }
+        .stat-card .value {
+            font-size: 20px;
+            font-weight: bold;
+        }
+        .loading {
+            text-align: center;
+            padding: 50px;
+            font-size: 18px;
+        }
+        .file-loader {
+            text-align: center;
+            padding: 20px;
+            background: #fff;
+            border: 1px solid #e5e5e5;
+            border-radius: 12px;
+            max-width: 600px;
+            margin: 50px auto;
+        }
+        .file-loader input[type="file"] {
+            margin: 15px 0;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>DTF Dashboard</h1>
+    <p class="subtitle">Visualizing DTF Indices</p>
+    <p class="disclaimer">Past performance is not a guarantee of future returns.</p>
+
+    <div id="file-loader" class="file-loader hidden">
+        <p>Select the dtf_prices.csv file to load the dashboard:</p>
+        <input type="file" id="csv-file" accept=".csv">
+    </div>
+
+    <div id="dashboard" class="hidden">
+        <div class="controls">
+            <div class="axis-selectors">
+                <div class="tooltip-container">
+                    <span class="tooltip-icon">?</span>
+                    <span class="tooltip-text tooltip-wide">
+                        <strong>Metric Definitions:</strong><br><br>
+                        <strong>Volatility:</strong> Annualized standard deviation of daily returns. Higher = more price swings.<br><br>
+                        <strong>Annualized Return:</strong> Total return extrapolated to a yearly rate.<br><br>
+                        <strong>Total Return:</strong> Percentage gain/loss over the selected period.<br><br>
+                        <strong>Sharpe Ratio:</strong> Risk-adjusted return (return ÷ volatility). Higher = better reward per unit of risk.<br><br>
+                        <strong>Sortino Ratio:</strong> Like Sharpe but only penalizes downside volatility.<br><br>
+                        <strong>Max Drawdown:</strong> Largest peak-to-trough decline. Shows worst-case loss.<br><br>
+                        <strong>Calmar Ratio:</strong> Annualized return ÷ max drawdown. Higher = better return relative to worst loss.
+                    </span>
+                    <span class="filter-row-title">Graph options:</span>
+                </div>
+                <div class="axis-select">
+                    <label for="x-axis">X-Axis:</label>
+                    <select id="x-axis">
+                        <option value="volatility" selected>Volatility (Std Dev)</option>
+                        <option value="annualizedReturn">Annualized Return</option>
+                        <option value="totalReturn">Total Return</option>
+                        <option value="sharpe">Sharpe Ratio</option>
+                        <option value="sortino">Sortino Ratio</option>
+                        <option value="maxDrawdown">Max Drawdown</option>
+                        <option value="calmar">Calmar Ratio</option>
+                    </select>
+                </div>
+                <div class="axis-select">
+                    <label for="y-axis">Y-Axis:</label>
+                    <select id="y-axis">
+                        <option value="volatility">Volatility (Std Dev)</option>
+                        <option value="annualizedReturn" selected>Annualized Return</option>
+                        <option value="totalReturn">Total Return</option>
+                        <option value="sharpe">Sharpe Ratio</option>
+                        <option value="sortino">Sortino Ratio</option>
+                        <option value="maxDrawdown">Max Drawdown</option>
+                        <option value="calmar">Calmar Ratio</option>
+                    </select>
+                </div>
+                <div class="axis-select">
+                    <label for="comparison">Comparison:</label>
+                    <select id="comparison">
+                        <option value="sp500">SP500</option>
+                        <option value="dow">DOW</option>
+                        <option value="btc">BTC</option>
+                        <option value="eth">ETH</option>
+                        <option value="usd-eur">USD-EUR</option>
+                        <option value="tips">TIPS</option>
+                    </select>
+                </div>
+                <div class="axis-select">
+                    <label>&nbsp;</label>
+                    <label class="toggle-label">
+                        <input type="checkbox" id="hide-incomplete" checked>
+                        <span class="toggle-text">Must have data</span>
+                    </label>
+                </div>
+                <div class="axis-select">
+                    <label>&nbsp;</label>
+                    <label class="toggle-label">
+                        <input type="checkbox" id="size-by-tvl">
+                        <span class="toggle-text">Size by TVL</span>
+                    </label>
+                </div>
+                <div class="filter-row">
+                    <span class="filter-row-title">Token Characteristic:</span>
+                    <div class="filter-options">
+                        <label class="toggle-label">
+                            <input type="checkbox" name="chain-filter" value="all" checked>
+                            <span class="toggle-text">All chains</span>
+                        </label>
+                        <label class="toggle-label">
+                            <input type="checkbox" name="chain-filter" value="ethereum">
+                            <span class="toggle-text">Ethereum</span>
+                        </label>
+                        <label class="toggle-label">
+                            <input type="checkbox" name="chain-filter" value="base">
+                            <span class="toggle-text">Base</span>
+                        </label>
+                        <label class="toggle-label">
+                            <input type="checkbox" name="chain-filter" value="binance">
+                            <span class="toggle-text">Binance</span>
+                        </label>
+                        <label class="toggle-label">
+                            <input type="checkbox" name="chain-filter" value="yield">
+                            <span class="toggle-text">Yield Token</span>
+                        </label>
+                        <label class="toggle-label">
+                            <input type="checkbox" name="chain-filter" value="index">
+                            <span class="toggle-text">Index Token</span>
+                        </label>
+                        <select id="meme-type" class="meme-select">
+                            <option value="">Meme: All</option>
+                            <option value="dog">Meme: Dog</option>
+                            <option value="frog">Meme: Frog</option>
+                            <option value="ai">Meme: AI</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="filter-row">
+                    <span class="filter-row-title">Performance based on:</span>
+                    <div class="filter-options">
+                        <label class="toggle-label">
+                            <input type="radio" name="performance-type" value="price" checked>
+                            <span class="toggle-text">Token Price</span>
+                        </label>
+                        <label class="toggle-label">
+                            <input type="radio" name="performance-type" value="governance">
+                            <span class="toggle-text">Token+Governance Yield</span>
+                        </label>
+                        <label class="toggle-label">
+                            <input type="radio" name="performance-type" value="collateralized">
+                            <span class="toggle-text">Token+Collateralized Yield</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="filter-row">
+                    <span class="filter-row-title">Performance adjustment:</span>
+                    <div class="filter-options">
+                        <label class="toggle-label">
+                            <input type="checkbox" name="perf-adjust" value="none" checked>
+                            <span class="toggle-text">None</span>
+                        </label>
+                        <label class="toggle-label">
+                            <input type="checkbox" name="perf-adjust" value="rebalancing">
+                            <span class="toggle-text">Rebalancing Cost</span>
+                        </label>
+                        <label class="toggle-label">
+                            <input type="checkbox" name="perf-adjust" value="taxes">
+                            <span class="toggle-text">Estimated Taxes</span>
+                        </label>
+                        <select id="tax-country" class="country-select">
+                            <option value="">Select Country</option>
+                            <option value="US">United States</option>
+                            <option value="GB">United Kingdom</option>
+                            <option value="DE">Germany</option>
+                            <option value="FR">France</option>
+                            <option value="CA">Canada</option>
+                            <option value="AU">Australia</option>
+                            <option value="JP">Japan</option>
+                            <option value="CH">Switzerland</option>
+                            <option value="SG">Singapore</option>
+                            <option value="AE">United Arab Emirates</option>
+                            <option value="NL">Netherlands</option>
+                            <option value="ES">Spain</option>
+                            <option value="IT">Italy</option>
+                            <option value="PT">Portugal</option>
+                            <option value="IE">Ireland</option>
+                            <option value="SE">Sweden</option>
+                            <option value="NO">Norway</option>
+                            <option value="DK">Denmark</option>
+                            <option value="FI">Finland</option>
+                            <option value="AT">Austria</option>
+                            <option value="BE">Belgium</option>
+                            <option value="NZ">New Zealand</option>
+                            <option value="HK">Hong Kong</option>
+                            <option value="KR">South Korea</option>
+                            <option value="IN">India</option>
+                            <option value="BR">Brazil</option>
+                            <option value="MX">Mexico</option>
+                            <option value="ZA">South Africa</option>
+                            <option value="PL">Poland</option>
+                            <option value="CZ">Czech Republic</option>
+                        </select>
+                        <span class="filter-disclaimer">Not tax advice. Always speak to a tax professional.</span>
+                    </div>
+                </div>
+            </div>
+            <div class="slider-container">
+                <label>Select Date Range:</label>
+                <div class="slider-wrapper">
+                    <div id="range-slider"></div>
+                    <div id="days-display" class="days-display">30 days</div>
+                </div>
+                <div class="date-labels">
+                    <span id="data-start-date">-</span>
+                    <span id="data-end-date">-</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="chart"></div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <h3 class="tooltip-container">
+                    <span class="tooltip-icon">?</span>
+                    <span class="tooltip-text">The DTF with the highest annualized return over the selected time period.</span>
+                    Highest Return
+                </h3>
+                <div id="highest-return" class="value">-</div>
+            </div>
+            <div class="stat-card">
+                <h3 class="tooltip-container">
+                    <span class="tooltip-icon">?</span>
+                    <span class="tooltip-text">The DTF with the lowest price volatility (standard deviation), indicating more stable performance.</span>
+                    Lowest Volatility
+                </h3>
+                <div id="lowest-vol" class="value">-</div>
+            </div>
+            <div class="stat-card">
+                <h3 class="tooltip-container">
+                    <span class="tooltip-icon">?</span>
+                    <span class="tooltip-text">The DTF with the best Sharpe Ratio (return ÷ volatility), showing highest reward per unit of risk.</span>
+                    Best Risk-Adjusted
+                </h3>
+                <div id="best-sharpe" class="value">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Date Range</h3>
+                <div id="date-range" class="value">-</div>
+            </div>
+        </div>
+
+        <div id="timeseries-container">
+            <h2 class="section-title">Deep Dive</h2>
+            <div id="timeseries-placeholder" class="timeseries-placeholder">
+                <p>Click on DTFs in the chart above to compare (click again to remove)</p>
+            </div>
+            <div id="timeseries-content" class="hidden">
+            <div class="timeseries-header">
+                <div class="timeseries-toggles">
+                    <label class="toggle-label">
+                        <input type="checkbox" id="link-sliders" checked>
+                        <span class="toggle-text">Link sliders</span>
+                    </label>
+                    <div class="view-mode-group">
+                        <label class="toggle-label">
+                            <input type="radio" name="view-mode" value="portfolio" checked>
+                            <span class="toggle-text">$10K portfolio</span>
+                        </label>
+                        <label class="toggle-label">
+                            <input type="radio" name="view-mode" value="price">
+                            <span class="toggle-text">Price</span>
+                        </label>
+                        <label class="toggle-label">
+                            <input type="radio" name="view-mode" value="percent">
+                            <span class="toggle-text">% change</span>
+                        </label>
+                    </div>
+                    <button id="clear-selection" class="clear-btn">Clear All</button>
+                </div>
+            </div>
+            <div class="timeseries-slider-container">
+                <div class="slider-wrapper">
+                    <div id="timeseries-slider"></div>
+                    <div id="timeseries-days-display" class="days-display">30 days</div>
+                </div>
+                <div class="date-labels">
+                    <span id="ts-start-date">-</span>
+                    <span id="ts-end-date">-</span>
+                </div>
+            </div>
+            <div id="timeseries-charts" class="timeseries-grid"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="loading" class="loading">Loading data...</div>
+
+    <script>
+        let rawData = [];
+        let dtfNames = [];
+
+        const dtfDisplayNames = {
+            'coinmarketcap-20-index-dtf': 'CMC 20 Index',
+            'cf-large-cap-index': 'CF Large Cap',
+            'open-stablecoin-index': 'Stablecoin Index',
+            'bloomberg-galaxy-crypto-index': 'Bloomberg Galaxy',
+            'alpha-base-index': 'Alpha Base',
+            'clanker-index': 'Clanker',
+            'marketvector-token-terminal-fundamental-index': 'MV Token Terminal',
+            'coindesk-defi-select-index': 'CoinDesk DeFi',
+            'defi-growth-index': 'DeFi Growth',
+            'rwa-index': 'RWA Index',
+            'virtuals-index': 'Virtuals'
+        };
+
+        const colors = [
+            '#2775ca', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
+            '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1', '#14b8a6'
+        ];
+
+        let rangeSlider;
+        let currentStartIdx = 0;
+        let currentEndIdx = 0;
+
+        function initDashboard(csvText) {
+            const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
+            rawData = parsed.data;
+            dtfNames = Object.keys(rawData[0]).filter(k => k !== 'timestamp');
+
+            const maxIdx = rawData.length - 1;
+            const startDate = rawData[0].timestamp;
+            const endDate = rawData[maxIdx].timestamp;
+
+            document.getElementById('data-start-date').textContent = startDate;
+            document.getElementById('data-end-date').textContent = endDate;
+
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('file-loader').classList.add('hidden');
+            document.getElementById('dashboard').classList.remove('hidden');
+
+            // Initialize range slider
+            const sliderEl = document.getElementById('range-slider');
+            rangeSlider = noUiSlider.create(sliderEl, {
+                start: [Math.max(0, maxIdx - 30), maxIdx],
+                connect: true,
+                range: { min: 0, max: maxIdx },
+                step: 1,
+                tooltips: [
+                    { to: (v) => rawData[Math.round(v)]?.timestamp || '' },
+                    { to: (v) => rawData[Math.round(v)]?.timestamp || '' }
+                ],
+                behaviour: 'drag-tap'
+            });
+
+            rangeSlider.on('update', function(values) {
+                if (updatingSliders) return;
+
+                currentStartIdx = Math.round(values[0]);
+                currentEndIdx = Math.round(values[1]);
+                const days = currentEndIdx - currentStartIdx + 1;
+                document.getElementById('days-display').textContent = days + ' days';
+                updateChart(currentStartIdx, currentEndIdx);
+
+                // If linked and timeseries is visible, update its slider too
+                if (document.getElementById('link-sliders').checked && timeseriesSlider && selectedDtfs.length > 0) {
+                    updatingSliders = true;
+                    currentTimeSeriesStartIdx = currentStartIdx;
+                    currentTimeSeriesEndIdx = currentEndIdx;
+                    timeseriesSlider.set([currentStartIdx, currentEndIdx]);
+                    document.getElementById('timeseries-days-display').textContent = days + ' days';
+                    updatingSliders = false;
+                    renderAllTimeSeries();
+                }
+            });
+
+            // Add event listeners for axis selectors and toggle
+            document.getElementById('x-axis').addEventListener('change', () => {
+                updateChart(currentStartIdx, currentEndIdx);
+            });
+            document.getElementById('y-axis').addEventListener('change', () => {
+                updateChart(currentStartIdx, currentEndIdx);
+            });
+            document.getElementById('hide-incomplete').addEventListener('change', () => {
+                updateChart(currentStartIdx, currentEndIdx);
+            });
+        }
+
+        const metricLabels = {
+            volatility: 'Volatility (Std Dev %)',
+            annualizedReturn: 'Annualized Return (%)',
+            totalReturn: 'Total Return (%)',
+            sharpe: 'Sharpe Ratio',
+            sortino: 'Sortino Ratio',
+            maxDrawdown: 'Max Drawdown (%)',
+            calmar: 'Calmar Ratio'
+        };
+
+        function calculateMetrics(startIdx, endIdx, includeIncomplete = false) {
+            const windowData = rawData.slice(startIdx, endIdx + 1);
+            const windowLength = windowData.length;
+
+            const results = [];
+
+            for (const dtf of dtfNames) {
+                const prices = windowData
+                    .map(row => parseFloat(row[dtf]))
+                    .filter(p => !isNaN(p) && p > 0);
+
+                const isComplete = prices.length >= windowLength;
+
+                // Skip incomplete if not including them, or skip if less than 2 data points
+                if (!isComplete && !includeIncomplete) continue;
+                if (prices.length < 2) continue;
+
+                // Calculate daily returns
+                const returns = [];
+                for (let i = 1; i < prices.length; i++) {
+                    returns.push((prices[i] - prices[i-1]) / prices[i-1]);
+                }
+
+                if (returns.length < 1) continue;
+
+                // Total return over period
+                const totalReturn = (prices[prices.length - 1] - prices[0]) / prices[0] * 100;
+
+                // Annualized return
+                const daysInPeriod = prices.length;
+                const annualizedReturn = ((1 + totalReturn/100) ** (365/daysInPeriod) - 1) * 100;
+
+                // Standard deviation of daily returns (annualized)
+                const avgReturn = returns.reduce((a, b) => a + b, 0) / returns.length;
+                const variance = returns.reduce((sum, r) => sum + (r - avgReturn) ** 2, 0) / returns.length;
+                const dailyStdDev = Math.sqrt(variance);
+                const annualizedStdDev = dailyStdDev * Math.sqrt(365) * 100;
+
+                // Sharpe Ratio (simplified, assuming 0 risk-free rate)
+                const sharpe = annualizedStdDev > 0 ? annualizedReturn / annualizedStdDev : 0;
+
+                // Sortino Ratio (downside deviation)
+                const negativeReturns = returns.filter(r => r < 0);
+                const downsideVariance = negativeReturns.length > 0
+                    ? negativeReturns.reduce((sum, r) => sum + r * r, 0) / returns.length
+                    : 0;
+                const downsideStdDev = Math.sqrt(downsideVariance) * Math.sqrt(365) * 100;
+                const sortino = downsideStdDev > 0 ? annualizedReturn / downsideStdDev : 0;
+
+                // Max Drawdown
+                let peak = prices[0];
+                let maxDrawdown = 0;
+                for (const price of prices) {
+                    if (price > peak) peak = price;
+                    const drawdown = (peak - price) / peak * 100;
+                    if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+                }
+
+                // Calmar Ratio (annualized return / max drawdown)
+                const calmar = maxDrawdown > 0 ? annualizedReturn / maxDrawdown : 0;
+
+                results.push({
+                    name: dtf,
+                    displayName: dtfDisplayNames[dtf] || dtf,
+                    volatility: annualizedStdDev,
+                    annualizedReturn: annualizedReturn,
+                    totalReturn: totalReturn,
+                    sharpe: sharpe,
+                    sortino: sortino,
+                    maxDrawdown: maxDrawdown,
+                    calmar: calmar,
+                    dataPoints: prices.length,
+                    isComplete: isComplete,
+                    completeness: Math.round((prices.length / windowLength) * 100)
+                });
+            }
+
+            return results;
+        }
+
+        function formatValue(value, metric) {
+            if (['sharpe', 'sortino', 'calmar'].includes(metric)) {
+                return value.toFixed(2);
+            }
+            return value.toFixed(1) + '%';
+        }
+
+        let selectedDtfs = []; // Array of {name, displayName}
+        let currentTimeSeriesStartIdx = 0;
+        let currentTimeSeriesEndIdx = 0;
+        let timeseriesSlider = null;
+        let updatingSliders = false;
+
+        function toggleDtfSelection(dtfName, displayName, startIdx, endIdx) {
+            const existingIdx = selectedDtfs.findIndex(d => d.name === dtfName);
+
+            if (existingIdx >= 0) {
+                // Remove if already selected
+                selectedDtfs.splice(existingIdx, 1);
+            } else {
+                // Add to selection
+                selectedDtfs.push({ name: dtfName, displayName: displayName });
+            }
+
+            currentTimeSeriesStartIdx = startIdx;
+            currentTimeSeriesEndIdx = endIdx;
+
+            if (selectedDtfs.length === 0) {
+                document.getElementById('timeseries-placeholder').classList.remove('hidden');
+                document.getElementById('timeseries-content').classList.add('hidden');
+            } else {
+                document.getElementById('timeseries-placeholder').classList.add('hidden');
+                document.getElementById('timeseries-content').classList.remove('hidden');
+                initTimeseriesSlider();
+                renderAllTimeSeries();
+            }
+        }
+
+        function removeDtf(dtfName) {
+            selectedDtfs = selectedDtfs.filter(d => d.name !== dtfName);
+            if (selectedDtfs.length === 0) {
+                document.getElementById('timeseries-placeholder').classList.remove('hidden');
+                document.getElementById('timeseries-content').classList.add('hidden');
+            } else {
+                renderAllTimeSeries();
+            }
+        }
+
+        function clearAllSelections() {
+            selectedDtfs = [];
+            document.getElementById('timeseries-placeholder').classList.remove('hidden');
+            document.getElementById('timeseries-content').classList.add('hidden');
+        }
+
+        function initTimeseriesSlider() {
+            const maxIdx = rawData.length - 1;
+            const sliderEl = document.getElementById('timeseries-slider');
+
+            // Update date labels
+            document.getElementById('ts-start-date').textContent = rawData[0].timestamp;
+            document.getElementById('ts-end-date').textContent = rawData[maxIdx].timestamp;
+
+            if (timeseriesSlider) {
+                // Update existing slider
+                updatingSliders = true;
+                timeseriesSlider.set([currentTimeSeriesStartIdx, currentTimeSeriesEndIdx]);
+                updatingSliders = false;
+            } else {
+                // Create new slider
+                timeseriesSlider = noUiSlider.create(sliderEl, {
+                    start: [currentTimeSeriesStartIdx, currentTimeSeriesEndIdx],
+                    connect: true,
+                    range: { min: 0, max: maxIdx },
+                    step: 1,
+                    tooltips: [
+                        { to: (v) => rawData[Math.round(v)]?.timestamp || '' },
+                        { to: (v) => rawData[Math.round(v)]?.timestamp || '' }
+                    ],
+                    behaviour: 'drag-tap'
+                });
+
+                timeseriesSlider.on('update', function(values) {
+                    if (updatingSliders) return;
+
+                    currentTimeSeriesStartIdx = Math.round(values[0]);
+                    currentTimeSeriesEndIdx = Math.round(values[1]);
+                    const days = currentTimeSeriesEndIdx - currentTimeSeriesStartIdx + 1;
+                    document.getElementById('timeseries-days-display').textContent = days + ' days';
+
+                    // If linked, update main slider and chart too
+                    if (document.getElementById('link-sliders').checked) {
+                        updatingSliders = true;
+                        currentStartIdx = currentTimeSeriesStartIdx;
+                        currentEndIdx = currentTimeSeriesEndIdx;
+                        rangeSlider.set([currentTimeSeriesStartIdx, currentTimeSeriesEndIdx]);
+                        document.getElementById('days-display').textContent = days + ' days';
+                        updatingSliders = false;
+                        updateChart(currentStartIdx, currentEndIdx);
+                    }
+
+                    renderAllTimeSeries();
+                });
+            }
+
+            const days = currentTimeSeriesEndIdx - currentTimeSeriesStartIdx + 1;
+            document.getElementById('timeseries-days-display').textContent = days + ' days';
+        }
+
+        function renderAllTimeSeries() {
+            if (selectedDtfs.length === 0) return;
+
+            const container = document.getElementById('timeseries-charts');
+            container.innerHTML = '';
+
+            selectedDtfs.forEach((dtf, idx) => {
+                const cardId = `dtf-card-${idx}`;
+                const chartId = `dtf-chart-${idx}`;
+                const statsId = `dtf-stats-${idx}`;
+
+                const cardHtml = `
+                    <div class="dtf-card" id="${cardId}">
+                        <div class="dtf-card-header">
+                            <h4 class="dtf-card-title">${dtf.displayName}</h4>
+                            <button class="dtf-remove-btn" onclick="removeDtf('${dtf.name}')">&times;</button>
+                        </div>
+                        <div class="dtf-about">
+                            <strong>About this DTF:</strong> A diversified crypto index tracking select assets.
+                        </div>
+                        <div class="dtf-meta">
+                            <span><strong>Market Cap:</strong> --</span>
+                            <span><strong>Created:</strong> --</span>
+                            <span><strong>Minting Fee:</strong> --</span>
+                            <span><strong>TVL Fee:</strong> --</span>
+                        </div>
+                        <div class="dtf-chart" id="${chartId}"></div>
+                        <div class="timeseries-stats" id="${statsId}"></div>
+                        <div class="dtf-footer">
+                            <a href="https://app.reserve.org" target="_blank" class="detailed-view-link">Detailed View →</a>
+                        </div>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', cardHtml);
+
+                renderSingleTimeSeries(dtf.name, dtf.displayName, chartId, statsId);
+            });
+        }
+
+        function renderSingleTimeSeries(dtfName, displayName, chartId, statsId) {
+            const viewMode = document.querySelector('input[name="view-mode"]:checked')?.value || 'portfolio';
+
+            // Use full data series
+            const dates = [];
+            const prices = [];
+            const dataIndices = [];
+
+            for (let i = 0; i < rawData.length; i++) {
+                const row = rawData[i];
+                const price = parseFloat(row[dtfName]);
+                if (!isNaN(price) && price > 0) {
+                    dates.push(row.timestamp);
+                    prices.push(price);
+                    dataIndices.push(i);
+                }
+            }
+
+            if (prices.length === 0) return;
+
+            // Find the price at the selected window start for $10K portfolio
+            let windowStartPrice = prices[0];
+            for (let i = 0; i < dataIndices.length; i++) {
+                if (dataIndices[i] >= currentTimeSeriesStartIdx) {
+                    windowStartPrice = prices[i];
+                    break;
+                }
+            }
+
+            // Calculate values based on mode
+            let yValues, yTitle, hoverTemplate;
+
+            if (viewMode === 'percent') {
+                yValues = prices.map(p => ((p - windowStartPrice) / windowStartPrice) * 100);
+                yTitle = 'Change (%)';
+                hoverTemplate = '<b>%{x}</b><br>Change: %{y:.2f}%<extra></extra>';
+            } else if (viewMode === 'price') {
+                yValues = prices;
+                yTitle = 'Price';
+                hoverTemplate = '<b>%{x}</b><br>Price: %{y:.4f}<extra></extra>';
+            } else {
+                // $10K portfolio value starting at window start
+                yValues = prices.map(p => (p / windowStartPrice) * 10000);
+                yTitle = 'Value ($)';
+                hoverTemplate = '<b>%{x}</b><br>Value: $%{y:,.0f}<extra></extra>';
+            }
+
+            const trace = {
+                x: dates,
+                y: yValues,
+                type: 'scatter',
+                mode: 'lines',
+                name: displayName,
+                line: { color: '#2775ca', width: 2 },
+                fill: 'tozeroy',
+                fillcolor: 'rgba(39, 117, 202, 0.1)',
+                hovertemplate: hoverTemplate
+            };
+
+            // Get dates for zoom range
+            const zoomStartDate = rawData[currentTimeSeriesStartIdx]?.timestamp;
+            const zoomEndDate = rawData[currentTimeSeriesEndIdx]?.timestamp;
+
+            const layout = {
+                title: null,
+                xaxis: {
+                    gridcolor: '#e5e5e5',
+                    tickfont: { color: '#6b7280', size: 10 },
+                    range: [zoomStartDate, zoomEndDate]
+                },
+                yaxis: {
+                    title: { text: yTitle, font: { color: '#6b7280', size: 11 } },
+                    gridcolor: '#e5e5e5',
+                    zerolinecolor: '#2775ca',
+                    tickfont: { color: '#6b7280', size: 10 }
+                },
+                paper_bgcolor: '#f7f3ef',
+                plot_bgcolor: '#f7f3ef',
+                font: { color: '#1a1a1a' },
+                margin: { t: 10, r: 30, b: 40, l: 50 },
+                hovermode: 'x unified'
+            };
+
+            Plotly.newPlot(chartId, [trace], layout, { responsive: true });
+
+            // Render stats for this DTF
+            renderSingleStats(dtfName, statsId);
+        }
+
+        function renderSingleStats(dtfName, statsId) {
+            const windowData = rawData.slice(currentTimeSeriesStartIdx, currentTimeSeriesEndIdx + 1);
+            const prices = windowData
+                .map(row => parseFloat(row[dtfName]))
+                .filter(p => !isNaN(p) && p > 0);
+
+            if (prices.length < 2) {
+                document.getElementById(statsId).innerHTML = '';
+                return;
+            }
+
+            // Calculate returns
+            const returns = [];
+            for (let i = 1; i < prices.length; i++) {
+                returns.push((prices[i] - prices[i-1]) / prices[i-1]);
+            }
+
+            // Total return
+            const totalReturn = ((prices[prices.length - 1] - prices[0]) / prices[0]) * 100;
+
+            // Annualized return
+            const daysInPeriod = prices.length;
+            const annualizedReturn = ((1 + totalReturn/100) ** (365/daysInPeriod) - 1) * 100;
+
+            // Volatility (annualized std dev)
+            const avgReturn = returns.reduce((a, b) => a + b, 0) / returns.length;
+            const variance = returns.reduce((sum, r) => sum + (r - avgReturn) ** 2, 0) / returns.length;
+            const dailyStdDev = Math.sqrt(variance);
+            const annualizedVol = dailyStdDev * Math.sqrt(365) * 100;
+
+            // Sharpe Ratio
+            const sharpe = annualizedVol > 0 ? annualizedReturn / annualizedVol : 0;
+
+            // Sortino Ratio
+            const negativeReturns = returns.filter(r => r < 0);
+            const downsideVariance = negativeReturns.length > 0
+                ? negativeReturns.reduce((sum, r) => sum + r * r, 0) / returns.length
+                : 0;
+            const downsideStdDev = Math.sqrt(downsideVariance) * Math.sqrt(365) * 100;
+            const sortino = downsideStdDev > 0 ? annualizedReturn / downsideStdDev : 0;
+
+            // Max Drawdown
+            let peak = prices[0];
+            let maxDrawdown = 0;
+            for (const price of prices) {
+                if (price > peak) peak = price;
+                const drawdown = (peak - price) / peak * 100;
+                if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+            }
+
+            // Calmar Ratio
+            const calmar = maxDrawdown > 0 ? annualizedReturn / maxDrawdown : 0;
+
+            // Portfolio values
+            const startValue = 10000;
+            const endValue = (prices[prices.length - 1] / prices[0]) * startValue;
+
+            const formatNum = (n, decimals = 2) => n.toFixed(decimals);
+            const colorClass = (n) => n >= 0 ? 'stat-positive' : 'stat-negative';
+
+            const statsHtml = `
+                <table>
+                    <tbody>
+                        <tr>
+                            <td><span class="tooltip-container"><span class="tooltip-icon">?</span><span class="tooltip-text">Starting with $10,000, this is the ending portfolio value.</span>$10K →</span></td>
+                            <td class="${colorClass(endValue - startValue)}">$${endValue.toLocaleString(undefined, {maximumFractionDigits: 0})}</td>
+                            <td><span class="tooltip-container"><span class="tooltip-icon">?</span><span class="tooltip-text">Total percentage gain or loss over the selected period.</span>Return</span></td>
+                            <td class="${colorClass(totalReturn)}">${formatNum(totalReturn)}%</td>
+                        </tr>
+                        <tr>
+                            <td><span class="tooltip-container"><span class="tooltip-icon">?</span><span class="tooltip-text">Total return extrapolated to a yearly rate.</span>Ann. Return</span></td>
+                            <td class="${colorClass(annualizedReturn)}">${formatNum(annualizedReturn)}%</td>
+                            <td><span class="tooltip-container"><span class="tooltip-icon">?</span><span class="tooltip-text">Annualized standard deviation of daily returns. Higher = more price swings.</span>Volatility</span></td>
+                            <td>${formatNum(annualizedVol)}%</td>
+                        </tr>
+                        <tr>
+                            <td><span class="tooltip-container"><span class="tooltip-icon">?</span><span class="tooltip-text">Maximum Drawdown: largest peak-to-trough decline. Shows worst-case loss.</span>Max DD</span></td>
+                            <td class="stat-negative">${formatNum(maxDrawdown)}%</td>
+                            <td><span class="tooltip-container"><span class="tooltip-icon">?</span><span class="tooltip-text">Risk-adjusted return (return ÷ volatility). Higher = better reward per unit of risk.</span>Sharpe</span></td>
+                            <td class="${colorClass(sharpe)}">${formatNum(sharpe)}</td>
+                        </tr>
+                        <tr>
+                            <td><span class="tooltip-container"><span class="tooltip-icon">?</span><span class="tooltip-text">Like Sharpe but only penalizes downside volatility. Better for asymmetric returns.</span>Sortino</span></td>
+                            <td class="${colorClass(sortino)}">${formatNum(sortino)}</td>
+                            <td><span class="tooltip-container"><span class="tooltip-icon">?</span><span class="tooltip-text">Annualized return ÷ max drawdown. Higher = better return relative to worst loss.</span>Calmar</span></td>
+                            <td class="${colorClass(calmar)}">${formatNum(calmar)}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            `;
+
+            document.getElementById(statsId).innerHTML = statsHtml;
+        }
+
+        // Add toggle listeners for view mode radio buttons
+        document.querySelectorAll('input[name="view-mode"]').forEach(radio => {
+            radio.addEventListener('change', renderAllTimeSeries);
+        });
+
+        // Clear all button
+        document.getElementById('clear-selection')?.addEventListener('click', clearAllSelections);
+
+        function updateChart(startIdx, endIdx) {
+            const hideIncomplete = document.getElementById('hide-incomplete').checked;
+            const metrics = calculateMetrics(startIdx, endIdx, !hideIncomplete);
+            const days = endIdx - startIdx + 1;
+
+            if (metrics.length === 0) {
+                console.error('No valid data for chart');
+                return;
+            }
+
+            const xMetric = document.getElementById('x-axis').value;
+            const yMetric = document.getElementById('y-axis').value;
+
+            // Separate complete and incomplete for different styling
+            const completeMetrics = metrics.filter(m => m.isComplete);
+            const incompleteMetrics = metrics.filter(m => !m.isComplete);
+
+            const traces = [];
+
+            // Complete data trace (solid markers)
+            if (completeMetrics.length > 0) {
+                traces.push({
+                    x: completeMetrics.map(m => m[xMetric]),
+                    y: completeMetrics.map(m => m[yMetric]),
+                    mode: 'markers+text',
+                    type: 'scatter',
+                    name: 'Complete',
+                    text: completeMetrics.map(m => m.displayName),
+                    textposition: 'top center',
+                    textfont: { color: '#1a1a1a', size: 11 },
+                    marker: {
+                        size: 15,
+                        color: completeMetrics.map((_, i) => colors[i % colors.length]),
+                        line: { color: '#fff', width: 2 }
+                    },
+                    customdata: completeMetrics,
+                    hovertemplate: '<b>%{text}</b><br>' +
+                        `${metricLabels[xMetric]}: %{x:.2f}<br>` +
+                        `${metricLabels[yMetric]}: %{y:.2f}<br>` +
+                        '<extra></extra>'
+                });
+            }
+
+            // Incomplete data trace (hollow markers)
+            if (incompleteMetrics.length > 0) {
+                traces.push({
+                    x: incompleteMetrics.map(m => m[xMetric]),
+                    y: incompleteMetrics.map(m => m[yMetric]),
+                    mode: 'markers+text',
+                    type: 'scatter',
+                    name: 'Incomplete',
+                    text: incompleteMetrics.map(m => `${m.displayName} (${m.completeness}%)`),
+                    textposition: 'top center',
+                    textfont: { color: '#6b7280', size: 10 },
+                    marker: {
+                        size: 15,
+                        color: 'rgba(0,0,0,0)',
+                        line: {
+                            color: incompleteMetrics.map((_, i) => colors[(completeMetrics.length + i) % colors.length]),
+                            width: 2
+                        },
+                        symbol: 'circle-open'
+                    },
+                    customdata: incompleteMetrics.map(m => m.completeness),
+                    hovertemplate: '<b>%{text}</b><br>' +
+                        `${metricLabels[xMetric]}: %{x:.2f}<br>` +
+                        `${metricLabels[yMetric]}: %{y:.2f}<br>` +
+                        '<extra></extra>'
+                });
+            }
+
+            const startDate = rawData[startIdx]?.timestamp || '';
+            const endDateStr = rawData[endIdx]?.timestamp || '';
+
+            const layout = {
+                title: {
+                    text: `${metricLabels[yMetric].replace(' (%)', '')} vs ${metricLabels[xMetric].replace(' (%)', '')} (${startDate} to ${endDateStr})`,
+                    font: { color: '#1a1a1a', size: 16 }
+                },
+                xaxis: {
+                    title: { text: metricLabels[xMetric], font: { color: '#6b7280' } },
+                    gridcolor: '#e5e5e5',
+                    zerolinecolor: '#d1d5db',
+                    tickfont: { color: '#6b7280' }
+                },
+                yaxis: {
+                    title: { text: metricLabels[yMetric], font: { color: '#6b7280' } },
+                    gridcolor: '#e5e5e5',
+                    zerolinecolor: '#d1d5db',
+                    tickfont: { color: '#6b7280' }
+                },
+                paper_bgcolor: '#fff',
+                plot_bgcolor: '#fff',
+                font: { color: '#1a1a1a' },
+                showlegend: false,
+                hovermode: 'closest',
+                margin: { t: 60, r: 40, b: 60, l: 70 }
+            };
+
+            const config = { responsive: true };
+
+            Plotly.newPlot('chart', traces, layout, config);
+
+            // Add click handler for time series
+            document.getElementById('chart').on('plotly_click', function(data) {
+                const point = data.points[0];
+                const traceIdx = point.curveNumber;
+                const pointIdx = point.pointIndex;
+
+                // Get the DTF name from the appropriate metrics array
+                let dtfData;
+                if (traceIdx === 0 && completeMetrics.length > 0) {
+                    dtfData = completeMetrics[pointIdx];
+                } else {
+                    dtfData = incompleteMetrics[pointIdx];
+                }
+
+                if (dtfData) {
+                    toggleDtfSelection(dtfData.name, dtfData.displayName, startIdx, endIdx);
+                }
+            });
+
+            // Update stats
+            if (metrics.length > 0) {
+                const highestReturn = metrics.reduce((a, b) => a.annualizedReturn > b.annualizedReturn ? a : b);
+                const lowestVol = metrics.reduce((a, b) => a.volatility < b.volatility ? a : b);
+                const bestSharpe = metrics.reduce((a, b) => a.sharpe > b.sharpe ? a : b);
+
+                document.getElementById('highest-return').textContent =
+                    `${highestReturn.displayName} (${highestReturn.annualizedReturn.toFixed(1)}%)`;
+                document.getElementById('lowest-vol').textContent =
+                    `${lowestVol.displayName} (${lowestVol.volatility.toFixed(1)}%)`;
+                document.getElementById('best-sharpe').textContent =
+                    `${bestSharpe.displayName} (${bestSharpe.sharpe.toFixed(2)})`;
+
+                document.getElementById('date-range').textContent = `${startDate} to ${endDateStr}`;
+            }
+        }
+
+        // Try to load CSV from same directory, fall back to file picker
+        fetch('dtf_prices.csv')
+            .then(response => {
+                if (!response.ok) throw new Error('File not found');
+                return response.text();
+            })
+            .then(csvText => {
+                initDashboard(csvText);
+            })
+            .catch(err => {
+                console.log('Could not auto-load CSV, showing file picker:', err);
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('file-loader').classList.remove('hidden');
+
+                document.getElementById('csv-file').addEventListener('change', function(e) {
+                    const file = e.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            initDashboard(e.target.result);
+                        };
+                        reader.readAsText(file);
+                    }
+                });
+            });
+    </script>
+</body>
+</html>
