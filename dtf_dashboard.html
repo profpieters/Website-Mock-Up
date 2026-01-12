@@ -333,6 +333,32 @@
             display: flex;
             gap: 5px;
         }
+        .comparison-group {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .comparison-label {
+            font-size: 14px;
+            font-weight: 500;
+            color: #1a1a1a;
+        }
+        .comparison-select {
+            background: #fff;
+            color: #1a1a1a;
+            border: 1px solid #e5e5e5;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        .comparison-select:hover {
+            border-color: #2775ca;
+        }
+        .comparison-select:focus {
+            outline: none;
+            border-color: #2775ca;
+        }
         .timeseries-slider-container {
             margin-bottom: 15px;
         }
@@ -787,6 +813,19 @@
                             <span class="toggle-text">% change</span>
                         </label>
                     </div>
+                    <div class="comparison-group">
+                        <label class="comparison-label">Show Comparison:</label>
+                        <select id="deep-dive-comparison" class="comparison-select">
+                            <option value="">None</option>
+                            <option value="bloomberg-galaxy-crypto-index">Bloomberg Galaxy (this one works!)</option>
+                            <option value="sp500">SP500</option>
+                            <option value="dow">DOW</option>
+                            <option value="btc">BTC</option>
+                            <option value="eth">ETH</option>
+                            <option value="usd-eur">USD-EUR</option>
+                            <option value="tips">TIPS</option>
+                        </select>
+                    </div>
                     <button id="clear-selection" class="clear-btn">Clear All</button>
                 </div>
             </div>
@@ -1136,6 +1175,7 @@
 
         function renderSingleTimeSeries(dtfName, displayName, chartId, statsId) {
             const viewMode = document.querySelector('input[name="view-mode"]:checked')?.value || 'portfolio';
+            const comparisonDtf = document.getElementById('deep-dive-comparison')?.value || '';
 
             // Use full data series
             const dates = [];
@@ -1193,6 +1233,57 @@
                 hovertemplate: hoverTemplate
             };
 
+            const traces = [trace];
+
+            // Add comparison trace if selected and it's a DTF in our data
+            if (comparisonDtf && dtfNames.includes(comparisonDtf) && comparisonDtf !== dtfName) {
+                const compDates = [];
+                const compPrices = [];
+                const compDataIndices = [];
+
+                for (let i = 0; i < rawData.length; i++) {
+                    const row = rawData[i];
+                    const price = parseFloat(row[comparisonDtf]);
+                    if (!isNaN(price) && price > 0) {
+                        compDates.push(row.timestamp);
+                        compPrices.push(price);
+                        compDataIndices.push(i);
+                    }
+                }
+
+                if (compPrices.length > 0) {
+                    // Find comparison start price at window start
+                    let compWindowStartPrice = compPrices[0];
+                    for (let i = 0; i < compDataIndices.length; i++) {
+                        if (compDataIndices[i] >= currentTimeSeriesStartIdx) {
+                            compWindowStartPrice = compPrices[i];
+                            break;
+                        }
+                    }
+
+                    let compYValues;
+                    const compDisplayName = dtfDisplayNames[comparisonDtf] || comparisonDtf;
+
+                    if (viewMode === 'percent') {
+                        compYValues = compPrices.map(p => ((p - compWindowStartPrice) / compWindowStartPrice) * 100);
+                    } else if (viewMode === 'price') {
+                        compYValues = compPrices;
+                    } else {
+                        compYValues = compPrices.map(p => (p / compWindowStartPrice) * 10000);
+                    }
+
+                    traces.push({
+                        x: compDates,
+                        y: compYValues,
+                        type: 'scatter',
+                        mode: 'lines',
+                        name: compDisplayName,
+                        line: { color: '#ef4444', width: 2, dash: 'dash' },
+                        hovertemplate: hoverTemplate.replace('%{y', `${compDisplayName}: %{y`)
+                    });
+                }
+            }
+
             // Get dates for zoom range
             const zoomStartDate = rawData[currentTimeSeriesStartIdx]?.timestamp;
             const zoomEndDate = rawData[currentTimeSeriesEndIdx]?.timestamp;
@@ -1214,10 +1305,12 @@
                 plot_bgcolor: '#f7f3ef',
                 font: { color: '#1a1a1a' },
                 margin: { t: 10, r: 30, b: 40, l: 50 },
-                hovermode: 'x unified'
+                hovermode: 'x unified',
+                showlegend: traces.length > 1,
+                legend: { x: 0, y: 1.1, orientation: 'h' }
             };
 
-            Plotly.newPlot(chartId, [trace], layout, { responsive: true });
+            Plotly.newPlot(chartId, traces, layout, { responsive: true });
 
             // Render stats for this DTF
             renderSingleStats(dtfName, statsId);
@@ -1321,6 +1414,9 @@
         document.querySelectorAll('input[name="view-mode"]').forEach(radio => {
             radio.addEventListener('change', renderAllTimeSeries);
         });
+
+        // Add listener for comparison dropdown
+        document.getElementById('deep-dive-comparison')?.addEventListener('change', renderAllTimeSeries);
 
         // Clear all button
         document.getElementById('clear-selection')?.addEventListener('click', clearAllSelections);
