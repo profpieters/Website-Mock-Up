@@ -946,6 +946,16 @@
             calmar: 'Calmar Ratio'
         };
 
+        const metricDescriptions = {
+            volatility: 'Annualized standard deviation of daily returns. Higher = more price swings.',
+            annualizedReturn: 'Total return extrapolated to a yearly rate.',
+            totalReturn: 'Percentage gain/loss over the selected period.',
+            sharpe: 'Risk-adjusted return (return ÷ volatility). Higher = better reward per unit of risk.',
+            sortino: 'Like Sharpe but only penalizes downside volatility.',
+            maxDrawdown: 'Largest peak-to-trough decline. Shows worst-case loss.',
+            calmar: 'Annualized return ÷ max drawdown. Higher = better return relative to worst loss.'
+        };
+
         function calculateMetrics(startIdx, endIdx, includeIncomplete = false) {
             const windowData = rawData.slice(startIdx, endIdx + 1);
             const windowLength = windowData.length;
@@ -1501,13 +1511,13 @@
                     font: { color: '#1a1a1a', size: 16 }
                 },
                 xaxis: {
-                    title: { text: metricLabels[xMetric], font: { color: '#6b7280' } },
+                    title: { text: `${metricLabels[xMetric]}<br><span style="font-size:11px;color:#6b7280">${metricDescriptions[xMetric]}</span>`, font: { color: '#1a1a1a' } },
                     gridcolor: '#e5e5e5',
                     zerolinecolor: '#d1d5db',
                     tickfont: { color: '#6b7280' }
                 },
                 yaxis: {
-                    title: { text: metricLabels[yMetric], font: { color: '#6b7280' } },
+                    title: { text: `${metricLabels[yMetric]}<br><span style="font-size:11px;color:#6b7280">${metricDescriptions[yMetric]}</span>`, font: { color: '#1a1a1a' } },
                     gridcolor: '#e5e5e5',
                     zerolinecolor: '#d1d5db',
                     tickfont: { color: '#6b7280' }
@@ -1517,7 +1527,7 @@
                 font: { color: '#1a1a1a' },
                 showlegend: false,
                 hovermode: 'closest',
-                margin: { t: 60, r: 40, b: 60, l: 70 }
+                margin: { t: 60, r: 40, b: 90, l: 100 }
             };
 
             const config = { responsive: true };
