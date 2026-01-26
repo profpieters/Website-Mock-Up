@@ -497,9 +497,8 @@
             color: #ef4444 !important;
         }
         #chart {
-            max-width: 1200px;
+            width: 100%;
             height: 600px;
-            margin: 0 auto;
             background: #fff;
             border-radius: 12px;
             border: 1px solid #e5e5e5;
@@ -558,6 +557,77 @@
         }
         .hidden {
             display: none;
+        }
+        /* Carousel styles */
+        .chart-carousel {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .carousel-arrow {
+            background: #fff;
+            border: 1px solid #e5e5e5;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            font-size: 18px;
+            cursor: pointer;
+            color: #2775ca;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .carousel-arrow:hover:not(:disabled) {
+            background: #2775ca;
+            color: #fff;
+            border-color: #2775ca;
+        }
+        .carousel-arrow:disabled {
+            color: #e5e5e5;
+            cursor: not-allowed;
+        }
+        .chart-container {
+            flex: 1;
+            min-width: 0;
+        }
+        .chart-view-indicator {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .view-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #e5e5e5;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .view-dot.active {
+            background: #2775ca;
+        }
+        .view-dot:hover {
+            background: #2775ca;
+        }
+        .chart-note {
+            text-align: center;
+            padding: 10px;
+            font-size: 12px;
+            color: #6b7280;
+            font-style: italic;
+            background: #f7f3ef;
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        #std-dev-options {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
         }
     </style>
 </head>
@@ -635,6 +705,13 @@
                     <label class="toggle-label">
                         <input type="checkbox" id="size-by-tvl">
                         <span class="toggle-text">Size by TVL</span>
+                    </label>
+                </div>
+                <div id="std-dev-options" class="axis-select hidden">
+                    <label>&nbsp;</label>
+                    <label class="toggle-label">
+                        <input type="checkbox" id="show-two-std-dev">
+                        <span class="toggle-text">Show ±2 Std Dev</span>
                     </label>
                 </div>
                 <div class="filter-row">
@@ -754,7 +831,18 @@
             </div>
         </div>
 
-        <div id="chart"></div>
+        <div class="chart-carousel">
+            <button class="carousel-arrow carousel-prev" id="chart-prev" disabled>&#8249;</button>
+            <div class="chart-container">
+                <div class="chart-view-indicator">
+                    <span class="view-dot active" data-view="0"></span>
+                    <span class="view-dot" data-view="1"></span>
+                </div>
+                <div id="chart"></div>
+                <div id="chart-note" class="chart-note hidden"></div>
+            </div>
+            <button class="carousel-arrow carousel-next" id="chart-next">&#8250;</button>
+        </div>
 
         <div class="stats">
             <div class="stat-card">
@@ -873,6 +961,11 @@
         let currentStartIdx = 0;
         let currentEndIdx = 0;
 
+        // Carousel state
+        let currentChartView = 0; // 0 = scatter, 1 = std dev range
+        const chartViews = ['scatter', 'stdDevRange'];
+        let showTwoStdDev = false;
+
         function initDashboard(csvText) {
             const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
             rawData = parsed.data;
@@ -910,7 +1003,7 @@
                 currentEndIdx = Math.round(values[1]);
                 const days = currentEndIdx - currentStartIdx + 1;
                 document.getElementById('days-display').textContent = days + ' days';
-                updateChart(currentStartIdx, currentEndIdx);
+                renderCurrentChart();
 
                 // If linked and timeseries is visible, update its slider too
                 if (document.getElementById('link-sliders').checked && timeseriesSlider && selectedDtfs.length > 0) {
@@ -926,13 +1019,42 @@
 
             // Add event listeners for axis selectors and toggle
             document.getElementById('x-axis').addEventListener('change', () => {
-                updateChart(currentStartIdx, currentEndIdx);
+                if (currentChartView === 0) {
+                    updateChart(currentStartIdx, currentEndIdx);
+                }
             });
             document.getElementById('y-axis').addEventListener('change', () => {
-                updateChart(currentStartIdx, currentEndIdx);
+                if (currentChartView === 0) {
+                    updateChart(currentStartIdx, currentEndIdx);
+                }
             });
             document.getElementById('hide-incomplete').addEventListener('change', () => {
-                updateChart(currentStartIdx, currentEndIdx);
+                renderCurrentChart();
+            });
+
+            // Carousel navigation
+            document.getElementById('chart-prev').addEventListener('click', () => {
+                if (currentChartView > 0) {
+                    switchChartView(currentChartView - 1);
+                }
+            });
+            document.getElementById('chart-next').addEventListener('click', () => {
+                if (currentChartView < chartViews.length - 1) {
+                    switchChartView(currentChartView + 1);
+                }
+            });
+
+            // Dot indicators click
+            document.querySelectorAll('.view-dot').forEach((dot, idx) => {
+                dot.addEventListener('click', () => switchChartView(idx));
+            });
+
+            // 2 std dev toggle
+            document.getElementById('show-two-std-dev').addEventListener('change', (e) => {
+                showTwoStdDev = e.target.checked;
+                if (currentChartView === 1) {
+                    updateStdDevChart(currentStartIdx, currentEndIdx);
+                }
             });
         }
 
@@ -1133,7 +1255,7 @@
                         rangeSlider.set([currentTimeSeriesStartIdx, currentTimeSeriesEndIdx]);
                         document.getElementById('days-display').textContent = days + ' days';
                         updatingSliders = false;
-                        updateChart(currentStartIdx, currentEndIdx);
+                        renderCurrentChart();
                     }
 
                     renderAllTimeSeries();
@@ -1567,6 +1689,203 @@
                     `${bestSharpe.displayName} (${bestSharpe.sharpe.toFixed(2)})`;
 
                 document.getElementById('date-range').textContent = `${startDate} to ${endDateStr}`;
+            }
+        }
+
+        function updateStdDevChart(startIdx, endIdx) {
+            const hideIncomplete = document.getElementById('hide-incomplete').checked;
+            const metrics = calculateMetrics(startIdx, endIdx, !hideIncomplete);
+
+            if (metrics.length === 0) {
+                console.error('No valid data for std dev chart');
+                return;
+            }
+
+            const traces = [];
+
+            // Sort metrics by volatility for cleaner display
+            const sortedMetrics = [...metrics].sort((a, b) => a.volatility - b.volatility);
+
+            sortedMetrics.forEach((m, idx) => {
+                const returnValue = m.annualizedReturn;
+                const stdDev = m.volatility;
+                const colorIdx = metrics.findIndex(orig => orig.name === m.name);
+
+                // Add 2 std dev trace first (behind) if enabled
+                if (showTwoStdDev) {
+                    traces.push({
+                        x: [stdDev],
+                        y: [returnValue],
+                        mode: 'markers',
+                        type: 'scatter',
+                        name: m.displayName + ' (2σ)',
+                        showlegend: false,
+                        marker: {
+                            size: 15,
+                            color: 'rgba(0,0,0,0)'
+                        },
+                        error_y: {
+                            type: 'data',
+                            array: [stdDev * 2],
+                            arrayminus: [stdDev * 2],
+                            visible: true,
+                            color: colors[colorIdx % colors.length],
+                            thickness: 1,
+                            width: 12
+                        },
+                        hoverinfo: 'skip'
+                    });
+                }
+
+                // Main point trace with 1 std dev error bars
+                traces.push({
+                    x: [stdDev],
+                    y: [returnValue],
+                    mode: 'markers+text',
+                    type: 'scatter',
+                    name: m.displayName,
+                    text: [m.displayName],
+                    textposition: 'top center',
+                    textfont: { color: '#1a1a1a', size: 11 },
+                    marker: {
+                        size: 15,
+                        color: colors[colorIdx % colors.length],
+                        line: { color: '#fff', width: 2 }
+                    },
+                    error_y: {
+                        type: 'data',
+                        array: [stdDev],
+                        arrayminus: [stdDev],
+                        visible: true,
+                        color: colors[colorIdx % colors.length],
+                        thickness: 2,
+                        width: 8
+                    },
+                    customdata: [m],
+                    hovertemplate: '<b>' + m.displayName + '</b><br>' +
+                        'Volatility: ' + stdDev.toFixed(2) + '%<br>' +
+                        'Return: ' + returnValue.toFixed(2) + '%<br>' +
+                        '±1σ Range: ' + (returnValue - stdDev).toFixed(2) + '% to ' + (returnValue + stdDev).toFixed(2) + '%<br>' +
+                        '<extra></extra>'
+                });
+            });
+
+            const startDate = rawData[startIdx]?.timestamp || '';
+            const endDateStr = rawData[endIdx]?.timestamp || '';
+
+            // Calculate y-axis range to always include 0
+            const allReturns = metrics.map(m => m.annualizedReturn);
+            const allStdDevs = metrics.map(m => m.volatility);
+            const multiplier = showTwoStdDev ? 2 : 1;
+            const minY = Math.min(0, ...allReturns.map((r, i) => r - allStdDevs[i] * multiplier));
+            const maxY = Math.max(0, ...allReturns.map((r, i) => r + allStdDevs[i] * multiplier));
+            const yPadding = (maxY - minY) * 0.15;
+
+            const layout = {
+                title: {
+                    text: `Return vs Volatility with Std Dev Range (${startDate} to ${endDateStr})`,
+                    font: { color: '#1a1a1a', size: 16 }
+                },
+                xaxis: {
+                    title: { text: 'Volatility (Std Dev %)', font: { color: '#1a1a1a' } },
+                    gridcolor: '#e5e5e5',
+                    zerolinecolor: '#d1d5db',
+                    tickfont: { color: '#6b7280' }
+                },
+                yaxis: {
+                    title: { text: 'Annualized Return (%)', font: { color: '#1a1a1a' } },
+                    gridcolor: '#e5e5e5',
+                    zerolinecolor: '#2775ca',
+                    zerolinewidth: 2,
+                    tickfont: { color: '#6b7280' },
+                    range: [minY - yPadding, maxY + yPadding]
+                },
+                paper_bgcolor: '#fff',
+                plot_bgcolor: '#fff',
+                font: { color: '#1a1a1a' },
+                showlegend: false,
+                hovermode: 'closest',
+                margin: { t: 60, r: 40, b: 60, l: 80 }
+            };
+
+            const config = { responsive: true };
+
+            Plotly.newPlot('chart', traces, layout, config);
+
+            // Add click handler for time series selection
+            document.getElementById('chart').on('plotly_click', function(data) {
+                const point = data.points[0];
+                const dtfData = point.customdata;
+                if (dtfData) {
+                    toggleDtfSelection(dtfData.name, dtfData.displayName, startIdx, endIdx);
+                }
+            });
+
+            // Show note
+            const noteEl = document.getElementById('chart-note');
+            if (showTwoStdDev) {
+                noteEl.innerHTML = 'Historically, ~68% of returns fall within 1 std dev (thick bars) and ~95% within 2 std dev (thin bars)';
+            } else {
+                noteEl.innerHTML = 'Historically, ~68% of returns fall within 1 standard deviation';
+            }
+            noteEl.classList.remove('hidden');
+
+            // Update stats (same as scatter view)
+            if (metrics.length > 0) {
+                const highestReturn = metrics.reduce((a, b) => a.annualizedReturn > b.annualizedReturn ? a : b);
+                const lowestVol = metrics.reduce((a, b) => a.volatility < b.volatility ? a : b);
+                const bestSharpe = metrics.reduce((a, b) => a.sharpe > b.sharpe ? a : b);
+
+                document.getElementById('highest-return').textContent =
+                    `${highestReturn.displayName} (${highestReturn.annualizedReturn.toFixed(1)}%)`;
+                document.getElementById('lowest-vol').textContent =
+                    `${lowestVol.displayName} (${lowestVol.volatility.toFixed(1)}%)`;
+                document.getElementById('best-sharpe').textContent =
+                    `${bestSharpe.displayName} (${bestSharpe.sharpe.toFixed(2)})`;
+
+                document.getElementById('date-range').textContent = `${startDate} to ${endDateStr}`;
+            }
+        }
+
+        function switchChartView(viewIndex) {
+            currentChartView = viewIndex;
+
+            // Update navigation arrows
+            document.getElementById('chart-prev').disabled = (viewIndex === 0);
+            document.getElementById('chart-next').disabled = (viewIndex === chartViews.length - 1);
+
+            // Update dot indicators
+            document.querySelectorAll('.view-dot').forEach((dot, idx) => {
+                dot.classList.toggle('active', idx === viewIndex);
+            });
+
+            // Show/hide view-specific options
+            const stdDevOptions = document.getElementById('std-dev-options');
+            const xAxisSelect = document.getElementById('x-axis').closest('.axis-select');
+            const yAxisSelect = document.getElementById('y-axis').closest('.axis-select');
+
+            if (viewIndex === 0) {
+                // Scatter view
+                xAxisSelect.classList.remove('hidden');
+                yAxisSelect.classList.remove('hidden');
+                stdDevOptions.classList.add('hidden');
+                document.getElementById('chart-note').classList.add('hidden');
+            } else {
+                // Std dev view
+                xAxisSelect.classList.add('hidden');
+                yAxisSelect.classList.add('hidden');
+                stdDevOptions.classList.remove('hidden');
+            }
+
+            // Render appropriate chart
+            renderCurrentChart();
+        }
+
+        function renderCurrentChart() {
+            if (currentChartView === 0) {
+                updateChart(currentStartIdx, currentEndIdx);
+            } else if (currentChartView === 1) {
+                updateStdDevChart(currentStartIdx, currentEndIdx);
             }
         }
 
