@@ -708,10 +708,17 @@
                     </label>
                 </div>
                 <div id="std-dev-options" class="axis-select hidden">
+                    <label>Return Type:</label>
+                    <select id="percentile-return-type">
+                        <option value="annualized">Annualized</option>
+                        <option value="daily">Daily</option>
+                    </select>
+                </div>
+                <div id="std-dev-toggle" class="axis-select hidden">
                     <label>&nbsp;</label>
                     <label class="toggle-label">
                         <input type="checkbox" id="show-two-std-dev">
-                        <span class="toggle-text">Show ±2 Std Dev</span>
+                        <span class="toggle-text">Show 95% range</span>
                     </label>
                 </div>
                 <div class="filter-row">
@@ -1052,6 +1059,13 @@
             // 2 std dev toggle
             document.getElementById('show-two-std-dev').addEventListener('change', (e) => {
                 showTwoStdDev = e.target.checked;
+                if (currentChartView === 1) {
+                    updateStdDevChart(currentStartIdx, currentEndIdx);
+                }
+            });
+
+            // Return type dropdown
+            document.getElementById('percentile-return-type').addEventListener('change', () => {
                 if (currentChartView === 1) {
                     updateStdDevChart(currentStartIdx, currentEndIdx);
                 }
@@ -1692,33 +1706,124 @@
             }
         }
 
+        // Helper function to calculate percentile from sorted array
+        function percentile(sortedArr, p) {
+            if (sortedArr.length === 0) return 0;
+            const idx = (p / 100) * (sortedArr.length - 1);
+            const lower = Math.floor(idx);
+            const upper = Math.ceil(idx);
+            if (lower === upper) return sortedArr[lower];
+            return sortedArr[lower] + (sortedArr[upper] - sortedArr[lower]) * (idx - lower);
+        }
+
+        function calculateReturnPercentiles(startIdx, endIdx) {
+            const windowData = rawData.slice(startIdx, endIdx + 1);
+            const windowLength = windowData.length;
+            const results = [];
+
+            for (const dtf of dtfNames) {
+                const prices = windowData
+                    .map(row => parseFloat(row[dtf]))
+                    .filter(p => !isNaN(p) && p > 0);
+
+                if (prices.length < 2) continue;
+
+                // Calculate daily returns (as decimal)
+                const dailyReturns = [];
+                for (let i = 1; i < prices.length; i++) {
+                    dailyReturns.push((prices[i] - prices[i-1]) / prices[i-1]);
+                }
+
+                if (dailyReturns.length < 2) continue;
+
+                // Sort daily returns for percentile calculation
+                const sortedDailyReturns = [...dailyReturns].sort((a, b) => a - b);
+
+                // Daily percentiles (as percentage)
+                const dailyP17 = percentile(sortedDailyReturns, 17) * 100;
+                const dailyP83 = percentile(sortedDailyReturns, 83) * 100;
+                const dailyP2_5 = percentile(sortedDailyReturns, 2.5) * 100;
+                const dailyP97_5 = percentile(sortedDailyReturns, 97.5) * 100;
+                const dailyMedian = percentile(sortedDailyReturns, 50) * 100;
+
+                // Total return
+                const totalReturn = (prices[prices.length - 1] - prices[0]) / prices[0] * 100;
+                const daysInPeriod = prices.length;
+                const annualizedReturn = ((1 + totalReturn/100) ** (365/daysInPeriod) - 1) * 100;
+
+                // Volatility for X-axis
+                const avgReturn = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length;
+                const variance = dailyReturns.reduce((sum, r) => sum + (r - avgReturn) ** 2, 0) / dailyReturns.length;
+                const dailyStdDev = Math.sqrt(variance);
+                const annualizedVol = dailyStdDev * Math.sqrt(365) * 100;
+
+                // Annualized percentiles: scale daily percentile deviations by sqrt(365)
+                // Center on actual annualized return, spread by annualized deviations
+                const sqrtYear = Math.sqrt(365);
+                const annualP17 = annualizedReturn + (dailyP17 - dailyMedian) * sqrtYear;
+                const annualP83 = annualizedReturn + (dailyP83 - dailyMedian) * sqrtYear;
+                const annualP2_5 = annualizedReturn + (dailyP2_5 - dailyMedian) * sqrtYear;
+                const annualP97_5 = annualizedReturn + (dailyP97_5 - dailyMedian) * sqrtYear;
+
+                results.push({
+                    name: dtf,
+                    displayName: dtfDisplayNames[dtf] || dtf,
+                    annualizedReturn,
+                    volatility: annualizedVol,
+                    // Daily percentiles
+                    dailyMedian,
+                    dailyP17,
+                    dailyP83,
+                    dailyP2_5,
+                    dailyP97_5,
+                    // Annualized percentiles (centered on actual annualized return)
+                    annualMedian: annualizedReturn,
+                    annualP17,
+                    annualP83,
+                    annualP2_5,
+                    annualP97_5,
+                    isComplete: prices.length >= windowLength
+                });
+            }
+
+            return results;
+        }
+
         function updateStdDevChart(startIdx, endIdx) {
             const hideIncomplete = document.getElementById('hide-incomplete').checked;
-            const metrics = calculateMetrics(startIdx, endIdx, !hideIncomplete);
+            const returnType = document.getElementById('percentile-return-type')?.value || 'annualized';
+            const isAnnualized = returnType === 'annualized';
+            const percentileData = calculateReturnPercentiles(startIdx, endIdx);
+            const filteredData = hideIncomplete ? percentileData.filter(d => d.isComplete) : percentileData;
 
-            if (metrics.length === 0) {
-                console.error('No valid data for std dev chart');
+            if (filteredData.length === 0) {
+                console.error('No valid data for percentile chart');
                 return;
             }
 
             const traces = [];
 
-            // Sort metrics by volatility for cleaner display
-            const sortedMetrics = [...metrics].sort((a, b) => a.volatility - b.volatility);
+            // Sort by volatility for cleaner display
+            const sortedData = [...filteredData].sort((a, b) => a.volatility - b.volatility);
 
-            sortedMetrics.forEach((m, idx) => {
-                const returnValue = m.annualizedReturn;
-                const stdDev = m.volatility;
-                const colorIdx = metrics.findIndex(orig => orig.name === m.name);
+            sortedData.forEach((m, idx) => {
+                const colorIdx = filteredData.findIndex(orig => orig.name === m.name);
 
-                // Add 2 std dev trace first (behind) if enabled
+                // Select the appropriate percentile values based on return type
+                const median = isAnnualized ? m.annualMedian : m.dailyMedian;
+                const p17 = isAnnualized ? m.annualP17 : m.dailyP17;
+                const p83 = isAnnualized ? m.annualP83 : m.dailyP83;
+                const p2_5 = isAnnualized ? m.annualP2_5 : m.dailyP2_5;
+                const p97_5 = isAnnualized ? m.annualP97_5 : m.dailyP97_5;
+
+                // Add 95% range trace first (behind) if enabled
                 if (showTwoStdDev) {
                     traces.push({
-                        x: [stdDev],
-                        y: [returnValue],
+                        x: [m.volatility],
+                        y: [median],
                         mode: 'markers',
                         type: 'scatter',
-                        name: m.displayName + ' (2σ)',
+                        name: m.displayName + ' (95%)',
                         showlegend: false,
                         marker: {
                             size: 15,
@@ -1726,8 +1831,8 @@
                         },
                         error_y: {
                             type: 'data',
-                            array: [stdDev * 2],
-                            arrayminus: [stdDev * 2],
+                            array: [p97_5 - median],
+                            arrayminus: [median - p2_5],
                             visible: true,
                             color: colors[colorIdx % colors.length],
                             thickness: 1,
@@ -1737,10 +1842,12 @@
                     });
                 }
 
-                // Main point trace with 1 std dev error bars
+                const returnLabel = isAnnualized ? 'Annualized' : 'Daily';
+
+                // Main point trace with 66% range error bars
                 traces.push({
-                    x: [stdDev],
-                    y: [returnValue],
+                    x: [m.volatility],
+                    y: [median],
                     mode: 'markers+text',
                     type: 'scatter',
                     name: m.displayName,
@@ -1754,8 +1861,8 @@
                     },
                     error_y: {
                         type: 'data',
-                        array: [stdDev],
-                        arrayminus: [stdDev],
+                        array: [p83 - median],
+                        arrayminus: [median - p17],
                         visible: true,
                         color: colors[colorIdx % colors.length],
                         thickness: 2,
@@ -1763,9 +1870,9 @@
                     },
                     customdata: [m],
                     hovertemplate: '<b>' + m.displayName + '</b><br>' +
-                        'Volatility: ' + stdDev.toFixed(2) + '%<br>' +
-                        'Return: ' + returnValue.toFixed(2) + '%<br>' +
-                        '±1σ Range: ' + (returnValue - stdDev).toFixed(2) + '% to ' + (returnValue + stdDev).toFixed(2) + '%<br>' +
+                        `Median ${returnLabel} Return: ` + median.toFixed(2) + '%<br>' +
+                        '66% Range: ' + p17.toFixed(2) + '% to ' + p83.toFixed(2) + '%<br>' +
+                        '95% Range: ' + p2_5.toFixed(2) + '% to ' + p97_5.toFixed(2) + '%<br>' +
                         '<extra></extra>'
                 });
             });
@@ -1773,27 +1880,32 @@
             const startDate = rawData[startIdx]?.timestamp || '';
             const endDateStr = rawData[endIdx]?.timestamp || '';
 
-            // Calculate y-axis range to always include 0
-            const allReturns = metrics.map(m => m.annualizedReturn);
-            const allStdDevs = metrics.map(m => m.volatility);
-            const multiplier = showTwoStdDev ? 2 : 1;
-            const minY = Math.min(0, ...allReturns.map((r, i) => r - allStdDevs[i] * multiplier));
-            const maxY = Math.max(0, ...allReturns.map((r, i) => r + allStdDevs[i] * multiplier));
+            // Calculate y-axis range to include all percentile ranges
+            let minY, maxY;
+            if (showTwoStdDev) {
+                minY = Math.min(0, ...filteredData.map(m => isAnnualized ? m.annualP2_5 : m.dailyP2_5));
+                maxY = Math.max(0, ...filteredData.map(m => isAnnualized ? m.annualP97_5 : m.dailyP97_5));
+            } else {
+                minY = Math.min(0, ...filteredData.map(m => isAnnualized ? m.annualP17 : m.dailyP17));
+                maxY = Math.max(0, ...filteredData.map(m => isAnnualized ? m.annualP83 : m.dailyP83));
+            }
             const yPadding = (maxY - minY) * 0.15;
+
+            const returnTypeLabel = isAnnualized ? 'Annualized' : 'Daily';
 
             const layout = {
                 title: {
-                    text: `Return vs Volatility with Std Dev Range (${startDate} to ${endDateStr})`,
+                    text: `${returnTypeLabel} Return Distribution (${startDate} to ${endDateStr})`,
                     font: { color: '#1a1a1a', size: 16 }
                 },
                 xaxis: {
-                    title: { text: 'Volatility (Std Dev %)', font: { color: '#1a1a1a' } },
+                    title: { text: 'Volatility (Annualized %)', font: { color: '#1a1a1a' } },
                     gridcolor: '#e5e5e5',
                     zerolinecolor: '#d1d5db',
                     tickfont: { color: '#6b7280' }
                 },
                 yaxis: {
-                    title: { text: 'Annualized Return (%)', font: { color: '#1a1a1a' } },
+                    title: { text: `${returnTypeLabel} Return (%)`, font: { color: '#1a1a1a' } },
                     gridcolor: '#e5e5e5',
                     zerolinecolor: '#2775ca',
                     zerolinewidth: 2,
@@ -1823,14 +1935,16 @@
 
             // Show note
             const noteEl = document.getElementById('chart-note');
+            const returnNote = isAnnualized ? 'annualized returns (compounded from daily)' : 'daily returns';
             if (showTwoStdDev) {
-                noteEl.innerHTML = 'Historically, ~68% of returns fall within 1 std dev (thick bars) and ~95% within 2 std dev (thin bars)';
+                noteEl.innerHTML = `Showing actual sample percentiles of ${returnNote}: 66% fall within thick bars (17th-83rd), 95% within thin bars (2.5th-97.5th)`;
             } else {
-                noteEl.innerHTML = 'Historically, ~68% of returns fall within 1 standard deviation';
+                noteEl.innerHTML = `Showing actual sample percentiles of ${returnNote}: 66% fall within the bars (17th-83rd percentile)`;
             }
             noteEl.classList.remove('hidden');
 
-            // Update stats (same as scatter view)
+            // Update stats using regular metrics
+            const metrics = calculateMetrics(startIdx, endIdx, !hideIncomplete);
             if (metrics.length > 0) {
                 const highestReturn = metrics.reduce((a, b) => a.annualizedReturn > b.annualizedReturn ? a : b);
                 const lowestVol = metrics.reduce((a, b) => a.volatility < b.volatility ? a : b);
@@ -1861,6 +1975,7 @@
 
             // Show/hide view-specific options
             const stdDevOptions = document.getElementById('std-dev-options');
+            const stdDevToggle = document.getElementById('std-dev-toggle');
             const xAxisSelect = document.getElementById('x-axis').closest('.axis-select');
             const yAxisSelect = document.getElementById('y-axis').closest('.axis-select');
 
@@ -1869,12 +1984,14 @@
                 xAxisSelect.classList.remove('hidden');
                 yAxisSelect.classList.remove('hidden');
                 stdDevOptions.classList.add('hidden');
+                stdDevToggle.classList.add('hidden');
                 document.getElementById('chart-note').classList.add('hidden');
             } else {
-                // Std dev view
+                // Percentile view
                 xAxisSelect.classList.add('hidden');
                 yAxisSelect.classList.add('hidden');
                 stdDevOptions.classList.remove('hidden');
+                stdDevToggle.classList.remove('hidden');
             }
 
             // Render appropriate chart
