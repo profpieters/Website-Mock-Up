@@ -1872,6 +1872,7 @@
                     hovertemplate: '<b>' + m.displayName + '</b><br>' +
                         `Median ${returnLabel} Return: ` + median.toFixed(2) + '%<br>' +
                         '66% Range: ' + p17.toFixed(2) + '% to ' + p83.toFixed(2) + '%<br>' +
+                        'Upper bar: +' + (p83 - median).toFixed(2) + '% | Lower bar: -' + (median - p17).toFixed(2) + '%<br>' +
                         '95% Range: ' + p2_5.toFixed(2) + '% to ' + p97_5.toFixed(2) + '%<br>' +
                         '<extra></extra>'
                 });
