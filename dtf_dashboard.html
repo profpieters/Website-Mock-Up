@@ -721,6 +721,14 @@
                         <span class="toggle-text">Show 95% range</span>
                     </label>
                 </div>
+                <div id="box-plot-sort" class="axis-select hidden">
+                    <label>Sort by:</label>
+                    <select id="box-plot-sort-select">
+                        <option value="median">Median Return</option>
+                        <option value="volatility">Volatility</option>
+                        <option value="alphabetical">Alphabetical</option>
+                    </select>
+                </div>
                 <div class="filter-row">
                     <span class="filter-row-title">Token Characteristic:</span>
                     <div class="filter-options">
@@ -844,6 +852,7 @@
                 <div class="chart-view-indicator">
                     <span class="view-dot active" data-view="0"></span>
                     <span class="view-dot" data-view="1"></span>
+                    <span class="view-dot" data-view="2"></span>
                 </div>
                 <div id="chart"></div>
                 <div id="chart-note" class="chart-note hidden"></div>
@@ -969,8 +978,8 @@
         let currentEndIdx = 0;
 
         // Carousel state
-        let currentChartView = 0; // 0 = scatter, 1 = std dev range
-        const chartViews = ['scatter', 'stdDevRange'];
+        let currentChartView = 0; // 0 = scatter, 1 = percentile range, 2 = box plot
+        const chartViews = ['scatter', 'percentileRange', 'boxPlot'];
         let showTwoStdDev = false;
 
         function initDashboard(csvText) {
@@ -1068,6 +1077,15 @@
             document.getElementById('percentile-return-type').addEventListener('change', () => {
                 if (currentChartView === 1) {
                     updateStdDevChart(currentStartIdx, currentEndIdx);
+                } else if (currentChartView === 2) {
+                    updateBoxPlotChart(currentStartIdx, currentEndIdx);
+                }
+            });
+
+            // Box plot sort dropdown
+            document.getElementById('box-plot-sort-select').addEventListener('change', () => {
+                if (currentChartView === 2) {
+                    updateBoxPlotChart(currentStartIdx, currentEndIdx);
                 }
             });
         }
@@ -1962,6 +1980,146 @@
             }
         }
 
+        function updateBoxPlotChart(startIdx, endIdx) {
+            const hideIncomplete = document.getElementById('hide-incomplete').checked;
+            const returnType = document.getElementById('percentile-return-type')?.value || 'annualized';
+            const isAnnualized = returnType === 'annualized';
+            const windowData = rawData.slice(startIdx, endIdx + 1);
+            const windowLength = windowData.length;
+
+            const boxData = [];
+
+            for (const dtf of dtfNames) {
+                const prices = windowData
+                    .map(row => parseFloat(row[dtf]))
+                    .filter(p => !isNaN(p) && p > 0);
+
+                const isComplete = prices.length >= windowLength;
+                if (hideIncomplete && !isComplete) continue;
+                if (prices.length < 2) continue;
+
+                // Calculate daily returns
+                const dailyReturns = [];
+                for (let i = 1; i < prices.length; i++) {
+                    dailyReturns.push((prices[i] - prices[i-1]) / prices[i-1] * 100);
+                }
+
+                if (dailyReturns.length < 2) continue;
+
+                let returns;
+                if (isAnnualized) {
+                    // Annualize each daily return for the box plot
+                    const sqrtYear = Math.sqrt(365);
+                    const avgDaily = dailyReturns.reduce((a, b) => a + b, 0) / dailyReturns.length;
+                    returns = dailyReturns.map(r => (r - avgDaily) * sqrtYear + avgDaily * 365);
+                } else {
+                    returns = dailyReturns;
+                }
+
+                boxData.push({
+                    name: dtfDisplayNames[dtf] || dtf,
+                    dtfName: dtf,
+                    returns: returns
+                });
+            }
+
+            if (boxData.length === 0) {
+                console.error('No valid data for box plot');
+                return;
+            }
+
+            // Calculate median and volatility for sorting
+            boxData.forEach(d => {
+                const sorted = [...d.returns].sort((x, y) => x - y);
+                d.median = sorted[Math.floor(sorted.length / 2)];
+                const avg = d.returns.reduce((a, b) => a + b, 0) / d.returns.length;
+                d.volatility = Math.sqrt(d.returns.reduce((sum, r) => sum + (r - avg) ** 2, 0) / d.returns.length);
+            });
+
+            // Sort based on selected option
+            const sortOption = document.getElementById('box-plot-sort-select')?.value || 'median';
+            if (sortOption === 'median') {
+                boxData.sort((a, b) => b.median - a.median);
+            } else if (sortOption === 'volatility') {
+                boxData.sort((a, b) => a.volatility - b.volatility);
+            } else {
+                boxData.sort((a, b) => a.name.localeCompare(b.name));
+            }
+
+            const traces = boxData.map((d, idx) => ({
+                y: d.returns,
+                type: 'box',
+                name: d.name,
+                marker: { color: colors[idx % colors.length] },
+                boxpoints: false,
+                whiskerwidth: 0.5,
+                hoverinfo: 'y+name',
+                customdata: d.dtfName
+            }));
+
+            const startDate = rawData[startIdx]?.timestamp || '';
+            const endDateStr = rawData[endIdx]?.timestamp || '';
+            const returnTypeLabel = isAnnualized ? 'Annualized' : 'Daily';
+
+            const layout = {
+                title: {
+                    text: `${returnTypeLabel} Return Distribution - Box Plot (${startDate} to ${endDateStr})`,
+                    font: { color: '#1a1a1a', size: 16 }
+                },
+                yaxis: {
+                    title: { text: `${returnTypeLabel} Return (%)`, font: { color: '#1a1a1a' } },
+                    gridcolor: '#e5e5e5',
+                    zerolinecolor: '#2775ca',
+                    zerolinewidth: 2,
+                    tickfont: { color: '#6b7280' }
+                },
+                xaxis: {
+                    tickfont: { color: '#6b7280' }
+                },
+                paper_bgcolor: '#fff',
+                plot_bgcolor: '#fff',
+                font: { color: '#1a1a1a' },
+                showlegend: false,
+                margin: { t: 60, r: 40, b: 100, l: 80 }
+            };
+
+            const config = { responsive: true };
+
+            Plotly.newPlot('chart', traces, layout, config);
+
+            // Add click handler for DTF selection
+            document.getElementById('chart').on('plotly_click', function(data) {
+                const point = data.points[0];
+                const dtfName = boxData[point.curveNumber]?.dtfName;
+                const displayName = boxData[point.curveNumber]?.name;
+                if (dtfName) {
+                    toggleDtfSelection(dtfName, displayName, startIdx, endIdx);
+                }
+            });
+
+            // Show note
+            const noteEl = document.getElementById('chart-note');
+            noteEl.innerHTML = `Box shows interquartile range (25th-75th percentile), whiskers extend to min/max. ${isAnnualized ? 'Returns are annualized from daily.' : 'Showing daily returns.'}`;
+            noteEl.classList.remove('hidden');
+
+            // Update stats
+            const metrics = calculateMetrics(startIdx, endIdx, !hideIncomplete);
+            if (metrics.length > 0) {
+                const highestReturn = metrics.reduce((a, b) => a.annualizedReturn > b.annualizedReturn ? a : b);
+                const lowestVol = metrics.reduce((a, b) => a.volatility < b.volatility ? a : b);
+                const bestSharpe = metrics.reduce((a, b) => a.sharpe > b.sharpe ? a : b);
+
+                document.getElementById('highest-return').textContent =
+                    `${highestReturn.displayName} (${highestReturn.annualizedReturn.toFixed(1)}%)`;
+                document.getElementById('lowest-vol').textContent =
+                    `${lowestVol.displayName} (${lowestVol.volatility.toFixed(1)}%)`;
+                document.getElementById('best-sharpe').textContent =
+                    `${bestSharpe.displayName} (${bestSharpe.sharpe.toFixed(2)})`;
+
+                document.getElementById('date-range').textContent = `${startDate} to ${endDateStr}`;
+            }
+        }
+
         function switchChartView(viewIndex) {
             currentChartView = viewIndex;
 
@@ -1980,19 +2138,30 @@
             const xAxisSelect = document.getElementById('x-axis').closest('.axis-select');
             const yAxisSelect = document.getElementById('y-axis').closest('.axis-select');
 
+            const boxPlotSort = document.getElementById('box-plot-sort');
+
             if (viewIndex === 0) {
                 // Scatter view
                 xAxisSelect.classList.remove('hidden');
                 yAxisSelect.classList.remove('hidden');
                 stdDevOptions.classList.add('hidden');
                 stdDevToggle.classList.add('hidden');
+                boxPlotSort.classList.add('hidden');
                 document.getElementById('chart-note').classList.add('hidden');
-            } else {
-                // Percentile view
+            } else if (viewIndex === 1) {
+                // Percentile range view
                 xAxisSelect.classList.add('hidden');
                 yAxisSelect.classList.add('hidden');
                 stdDevOptions.classList.remove('hidden');
                 stdDevToggle.classList.remove('hidden');
+                boxPlotSort.classList.add('hidden');
+            } else {
+                // Box plot view
+                xAxisSelect.classList.add('hidden');
+                yAxisSelect.classList.add('hidden');
+                stdDevOptions.classList.remove('hidden');
+                stdDevToggle.classList.add('hidden');
+                boxPlotSort.classList.remove('hidden');
             }
 
             // Render appropriate chart
@@ -2004,6 +2173,8 @@
                 updateChart(currentStartIdx, currentEndIdx);
             } else if (currentChartView === 1) {
                 updateStdDevChart(currentStartIdx, currentEndIdx);
+            } else if (currentChartView === 2) {
+                updateBoxPlotChart(currentStartIdx, currentEndIdx);
             }
         }
 
