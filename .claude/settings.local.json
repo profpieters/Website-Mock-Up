@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(start http://localhost:8000/dtf_dashboard.html)",
+      "Bash(python -m http.server:*)",
+      "Bash(start C:ProjectsWebsitedtf_dashboard.html)",
+      "Bash(start \"\" \"C:\\\\Projects\\\\Website\\\\dtf_dashboard.html\")",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(cmd.exe /c start http://localhost:8000/dtf_dashboard.html)",
+      "mcp__ide__getDiagnostics",
+      "Bash(powershell -Command \"Select-String -Path dtf_dashboard.html -Pattern ''hovertemplate.*Median'' -Context 0,3\")",
+      "Bash(python:*)",
+      "Bash(ls does:*)"
+    ]
+  }
+}
